@@ -32,6 +32,7 @@
 
 #include <boost/optional.hpp>
 #include <boost/intrusive_ptr.hpp>
+#include <curl/curl.h>
 #include <deque>
 #include <list>
 #include <string>
@@ -1006,6 +1007,92 @@ private:
     // will decrement this value by an amount scaled by _nDocsInColl as an attempt to appear as if
     // the documents were produced by a top-k random sort.
     double _randMetaFieldVal = 1.0;
+};
+
+class DocumentSourceSocketBson final : public DocumentSource {
+public:
+    ~DocumentSourceSocketBson();
+    // virtuals from DocumentSource
+    boost::optional<Document> getNext() final;
+    const char* getSourceName() const final {
+        return "$socketBSON";
+    }
+    BSONObjSet getOutputSorts() final {
+        return pSource ? pSource->getOutputSorts() : BSONObjSet();
+    }
+
+    Value serialize(bool explain = false) const final {
+        return Value(DOC(getSourceName() << host));
+    }
+
+    GetDepsReturn getDependencies(DepsTracker* deps) const final {
+        return SEE_NEXT;  // This doesn't affect needed fields
+    }
+
+    static boost::intrusive_ptr<DocumentSourceSocketBson> create(
+        const boost::intrusive_ptr<ExpressionContext>& pExpCtx, BSONElement options) {
+        return new DocumentSourceSocketBson(pExpCtx, options);
+    }
+
+    static boost::intrusive_ptr<DocumentSource> createFromBson(
+        BSONElement options, const boost::intrusive_ptr<ExpressionContext>& pExpCtx) {
+        return DocumentSourceSocketBson::create(pExpCtx, options);
+    }
+
+private:
+    DocumentSourceSocketBson(const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
+                             BSONElement options);
+    boost::optional<Document> getNextLookup();
+    boost::optional<Document> getNextNoLookup();
+    void writeToSocket(BSONObj bson);
+    boost::optional<BSONObj> readFromSocket();
+
+    BSONObj options;
+    std::string host;
+    int sockfd;
+    bool lookupInProgress;
+};
+
+struct jsonBuffer {
+    char* data;
+    size_t size;
+};
+
+class DocumentSourceHttpGetJson final : public DocumentSource {
+public:
+    ~DocumentSourceHttpGetJson();
+    boost::optional<Document> getNext() final;
+
+    const char* getSourceName() const final {
+        return "$httpGET";
+    }
+
+    BSONObjSet getOutputSorts() final {
+        return pSource ? pSource->getOutputSorts() : BSONObjSet();
+    }
+
+    Value serialize(bool explain = false) const final {
+        return Value(DOC(getSourceName() << uri));
+    }
+
+    static boost::intrusive_ptr<DocumentSourceHttpGetJson> create(
+        const boost::intrusive_ptr<ExpressionContext>& pExpCtx, BSONElement options) {
+        return new DocumentSourceHttpGetJson(pExpCtx, options);
+    }
+
+    static boost::intrusive_ptr<DocumentSource> createFromBson(
+        BSONElement options, const boost::intrusive_ptr<ExpressionContext>& pExpCtx) {
+        return DocumentSourceHttpGetJson::create(pExpCtx, options);
+    }
+
+private:
+    DocumentSourceHttpGetJson(const boost::intrusive_ptr<ExpressionContext>& pExpCtx,
+                              BSONElement options);
+    CURL* curl;  // our curl object
+    struct jsonBuffer jsonBuf;
+    BSONObj options;
+    std::string uri;
+    int count;
 };
 
 class DocumentSourceLimit final : public DocumentSource, public SplittableDocumentSource {

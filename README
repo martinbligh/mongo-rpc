@@ -1,79 +1,65 @@
-MongoDB README
+This tree contains a couple of new aggregation stages, $socketBSON and $httpGET
 
-Welcome to MongoDB!
+$httpGET takes a URI (optionally with paramters in the "query" field) and expects a single JSON document back.
 
-COMPONENTS
+$socketBSON creates a bidirectional stream of BSON documents on a 1-1 basis. For each document in, you should get one document back.
+If you don't specify a "localField", it currently expects a unidirectional input stream of BSON. Will add other options later.
+$socketBSON only supports IPv4 - fix it if you care ;-)
 
-  mongod - The database process.
-  mongos - Sharding controller.
-  mongo  - The database shell (uses interactive javascript).
+Some of the tests use a sample mysql database found here: 
+https://dev.mysql.com/doc/world-setup/en/world-setup-installation.html
 
-UTILITIES
+Example xinetd conf files are in xinetd/ - put them in /etc/xinetd.d and do "service xinetd restart"
+There's some sample test data in test/
+Some python scripts of example connectors in the connectors/ directory
 
-  mongodump         - MongoDB dump tool - for backups, snapshots, etc.
-  mongorestore      - MongoDB restore a dump
-  mongoexport       - Export a single collection to test (JSON, CSV)
-  mongoimport       - Import from JSON or CSV
-  mongofiles        - Utility for putting and getting files from MongoDB GridFS
-  mongostat         - Show performance statistics
+The trickiest thing with $socketBSON is unwanted IO buffering. Using "python -u" helps.
 
-BUILDING
+---------------------------------------------------------------------------
 
-  See docs/building.md, also www.mongodb.org search for "Building".
+$httpGET examples:
 
-RUNNING
+db.test.aggregate({'$httpGET':'https://www.quandl.com/api/v3/datasets/FRED/NGDPPOT.json'})
 
-  For command line options invoke:
+db.test.aggregate([{'$httpGET':{'uri':'http://api.nytimes.com/svc/search/v2/articlesearch.json','query':{'q':'obama','api-key':'c2fede7bd9aea57c898f538e5ec0a1ee:6:68700045'}}}), {$unwind: {path:"$response.docs"}}, {$limit:1}])
 
-    $ ./mongod --help
+---------------------------------------------------------------------------
 
-  To run a single server database:
+$socketBSON examples:
 
-    $ mkdir /data/db
-    $ ./mongod
-    $
-    $ # The mongo javascript shell connects to localhost and test database by default:
-    $ ./mongo 
-    > help
+First, let's look at the data that get written to the pipe by mongod
+$ cat ~/test/mysql_execute.json
+{"host":"localhost", "user":"mbligh", "passwd":"", "db":"world", "sql":"SELECT CountryCode,Name,Population FROM City WHERE District=%s", "wherekeys":["district"]}
+{"district":"Iowa"}
+{"district":"Virginia"}
 
-DRIVERS
+Now the data that will be in the reply.
+$ json2bson < ~/test/mysql_execute.json | mysql_execute | bson2json
+{"": [{"Name": "Des Moines", "CountryCode": "USA", "Population": 198682}, {"Name": "Cedar Rapids", "CountryCode": "USA", "Population": 120758}, {"Name": "Davenport", "CountryCode": "USA", "Population": 98256}]}
+{"": [{"Name": "Virginia Beach", "CountryCode": "USA", "Population": 425257}, {"Name": "Norfolk", "CountryCode": "USA", "Population": 234403}, {"Name": "Chesapeake", "CountryCode": "USA", "Population": 199184}, {"Name": "Richmond", "CountryCode": "USA", "Population": 197790}, {"Name": "Newport News", "CountryCode": "USA", "Population": 180150}, {"Name": "Arlington", "CountryCode": "USA", "Population": 174838}, {"Name": "Hampton", "CountryCode": "USA", "Population": 146437}, {"Name": "Alexandria", "CountryCode": "USA", "Population": 128283}, {"Name": "Portsmouth", "CountryCode": "USA", "Population": 100565}, {"Name": "Roanoke", "CountryCode": "USA", "Population": 93357}]}
 
-  Client drivers for most programming languages are available at
-  mongodb.org.  Use the shell ("mongo") for administrative tasks.
 
-PACKAGING
-
-  Packages are created dynamically by the package.py script located in the
-  buildscripts directory. This will generate RPM and Debian packages.
-
-DOCUMENTATION
-
-  http://www.mongodb.org/
- 
-CLOUD MANAGED MONGODB
-
-  http://cloud.mongodb.com/
-
-MAIL LISTS AND IRC
-
-  http://dochub.mongodb.org/core/community
-  
-LEARN MONGODB
-
-  http://university.mongodb.com/
-
-32 BIT BUILD NOTES
-
-  MongoDB uses memory mapped files.  If built as a 32 bit executable, you will
-  not be able to work with large (multi-gigabyte) databases.  However, 32 bit
-  builds work fine with small development databases.
-
-LICENSE
-
-  Most MongoDB source files (src/mongo folder and below) are made available
-  under the terms of the GNU Affero General Public License (AGPL).  See
-  individual files for details.
-
-  As an exception, the files in the client/, debian/, rpm/,
-  utils/mongoutils, and all subdirectories thereof are made available under
-  the terms of the Apache License, version 2.0.
+Now let's make that happen with aggregate:
+> db.test.aggregate({'$socketBSON':{host:'localhost',port:668, localField:'', as:'cities', initial:{"host":"localhost", "user":"mbligh", "passwd":"", "db":"world", "sql":"SELECT CountryCode,Name,Population FROM City WHERE District=%s", "wherekeys":["district"]}}}).pretty()
+{
+        "_id" : ObjectId("5723cbb9f08e20a32022a52f"),
+        "district" : "Iowa",
+        "cities" : {
+                "" : [
+                        { "Name" : "Des Moines", "CountryCode" : "USA", "Population" : NumberLong(198682) },
+                        { "Name" : "Cedar Rapids", "CountryCode" : "USA", "Population" : NumberLong(120758) },
+                        { "Name" : "Davenport","CountryCode" : "USA", "Population" : NumberLong(98256) }
+                ]
+        }
+}
+{
+        "_id" : ObjectId("5723cbb9f08e20a32022a530"),
+        "district" : "Virginia",
+        "cities" : {
+                "" : [
+                        { "Name" : "Virginia Beach",  "CountryCode" : "USA","Population" : NumberLong(425257) },
+                        { "Name" : "Norfolk", "CountryCode" : "USA",  "Population" : NumberLong(234403) },
+                        { "Name" : "Chesapeake", "CountryCode" : "USA", "Population" : NumberLong(199184) },
+          ....
+                ]
+}

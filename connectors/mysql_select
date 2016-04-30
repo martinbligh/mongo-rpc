@@ -1,0 +1,32 @@
+#!/usr/bin/python -u
+import sys, bson, MySQLdb, collections
+
+# Expects 2 or more documents. First is db connection info, and any common select info,
+# then a series of where "clauses"
+# { host:string, user:string, passwd:string, db:string, table:string, columns:[string],
+#   where:wherestring, wherekeys:[string] }
+# { {k:v, k:v} }, .....
+
+
+sys.stderr = open('/tmp/mysql.log', 'w', 0)
+mycopy = open("/tmp/mysql.debug", "w", 0)
+select = None
+for doc in bson.decode_file_iter(sys.stdin):
+    sys.stderr.write("IN: %s\n" % doc);
+    if select is None:       # First one in the pipe
+        select = doc
+        cursor = MySQLdb.connect(host=select['host'], user=select['user'],
+                                 passwd=select['passwd'], db=select['db']).cursor()
+        columns = ','.join(select['columns'])
+        continue
+    values = tuple([doc[key] for key in select['wherekeys']])
+    selectSQL = "SELECT %s FROM %s WHERE %s" % (columns, select['table'], select['where'])
+    cursor.execute(selectSQL, values)
+    sys.stderr.write((selectSQL % values) + "\n");
+
+    for row in cursor.fetchall():
+        sys.stderr.write("OUT: %s\n" % (row,))
+        sys.stdout.write(bson.BSON.encode(collections.OrderedDict(zip(select['columns'], row))))
+    # This is pretty foul - BSON is incapable of supporting arrays, so we use {} as an end marker
+    sys.stdout.write(bson.BSON.encode({}))
+    sys.stderr.write("DONE\n");

@@ -1,0 +1,3 @@
+{"host":"localhost", "user":"mbligh", "passwd":"", "db":"world", "table":"City", "columns":[ "CountryCode", "Name", "Population" ], "where":"District=%s", "wherekeys":["district"]}
+{"district":"Iowa"}
+{"district":"Virginia"}

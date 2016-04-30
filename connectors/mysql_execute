@@ -1,0 +1,25 @@
+#!/usr/bin/python -u
+import sys, bson, MySQLdb, collections
+import MySQLdb.cursors
+# Expects 2 or more documents. First is db connection info, and any common select info,
+# then a series of where "clauses"
+# { host:string, user:string, passwd:string, db:string, table:string, sql:string,
+#  values:[...] }
+# { {k1:v1, k2:v2} }, .....
+
+
+sys.stderr = open('/tmp/mysql.log', 'w', 0)
+mycopy = open("/tmp/mysql.debug", "w", 0)
+select = None
+for doc in bson.decode_file_iter(sys.stdin):
+    sys.stderr.write("IN: %s\n" % doc);
+    if select is None:       # First one in the pipe
+        select = doc
+        cursor = MySQLdb.connect(host=select['host'], user=select['user'], passwd=select['passwd'],
+                                 db=select['db'], cursorclass=MySQLdb.cursors.SSDictCursor).cursor()
+        continue
+    values = tuple([doc[key] for key in select['wherekeys']])
+    cursor.execute(select['sql'], values)
+    sys.stderr.write((select['sql'] % values) + "\n");
+
+    sys.stdout.write(bson.BSON.encode({'':cursor.fetchall()}))
