@@ -113,7 +113,7 @@ boost::optional<Document> DocumentSourceHttpGetJson::getNext() {
     } else if (++count > 1)
         return boost::none;
 
-    log() << uri;
+    log() << "httpGET getNext " << uri;
 
     // Currently we do this all up front - for streaming many docs per doc of input,
     // would need to move to getNext
@@ -128,7 +128,21 @@ boost::optional<Document> DocumentSourceHttpGetJson::getNext() {
     if (jsonBuf.size <= 0 || jsonBuf.data == nullptr)
         return boost::none;
 
-    output.setField("response", Value(fromjson(jsonBuf.data).getObjectField("response")));
+    log() << "httpGET getNext curl returned " << jsonBuf.size << " bytes";
+
+    BSONObj bson = fromjson(jsonBuf.data);
+    if (options.hasField("subfield")) {
+        BSONElement elem = bson.getFieldDotted(options.getStringField("subfield"));
+        if (options.hasField("as"))
+            output.setField(options.getStringField("as"), Value(elem));
+        else
+            output.reset(Document(elem.Obj()));
+    } else {
+        if (options.hasField("as"))
+            output.setField(options.getStringField("as"), Value(bson));
+        else
+            output.reset(Document(bson));
+    }
 
     // we need to add the stuff we already had here
     free(jsonBuf.data);

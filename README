@@ -19,9 +19,12 @@ The trickiest thing with $socketBSON is unwanted IO buffering. Using "python -u"
 
 $httpGET examples:
 
-db.test.aggregate({'$httpGET':'https://www.quandl.com/api/v3/datasets/FRED/NGDPPOT.json'})
+db.test.aggregate({'$httpGET':{'uri:'https://www.quandl.com/api/v3/datasets/FRED/NGDPPOT.json', 'subfield':'dataset', 'as':"foo"}})
+
+db.test.aggregate({$httpGET:{'uri':'https://api.enigma.io/v2/data/Ym7JIgsmje7zkU6kA6G8VgAyRB5INIpDXamVvxNwCJiFP7YTisfW3/us.gov.government-spending.awards.grants'}})
 
 db.test.aggregate([{'$httpGET':{'uri':'http://api.nytimes.com/svc/search/v2/articlesearch.json','query':{'q':'obama','api-key':'c2fede7bd9aea57c898f538e5ec0a1ee:6:68700045'}}}), {$unwind: {path:"$response.docs"}}, {$limit:1}])
+
 
 ---------------------------------------------------------------------------
 
