@@ -1,0 +1,22 @@
+#!/usr/bin/python -u
+import sys, collections, csv, urllib2, bson
+
+# Input: one document.
+# { "uri":<uri> }
+
+# Reads a csv file from the URI. Expects first line to be the column names (will add an option)
+# Streams back one BSON doc per line of input
+
+uri = None
+for doc in bson.decode_file_iter(sys.stdin):
+    uri = doc['uri']
+    break
+
+headers = None
+for row in csv.reader(urllib2.urlopen(uri)):
+    if headers is None:
+        headers = row
+    else:
+        data = dict(zip(headers, row))
+        sys.stdout.write(bson.BSON.encode(data))
+

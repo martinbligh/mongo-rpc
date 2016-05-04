@@ -1051,6 +1051,7 @@ private:
     std::string host;
     int sockfd;
     bool lookupInProgress;
+    bool streamDocsOut;
 };
 
 struct jsonBuffer {

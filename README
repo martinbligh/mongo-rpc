@@ -2,7 +2,7 @@ This tree contains a couple of new aggregation stages, $socketBSON and $httpGET
 
 $httpGET takes a URI (optionally with paramters in the "query" field) and expects a single JSON document back.
 
-$socketBSON creates a bidirectional stream of BSON documents on a 1-1 basis. For each document in, you should get one document back.
+$socketBSON creates a bidirectional stream of BSON documents. For each document in, you should get one document back.
 If you don't specify a "localField", it currently expects a unidirectional input stream of BSON. Will add other options later.
 $socketBSON only supports IPv4 - fix it if you care ;-)
 
@@ -28,7 +28,7 @@ db.test.aggregate([{'$httpGET':{'uri':'http://api.nytimes.com/svc/search/v2/arti
 
 ---------------------------------------------------------------------------
 
-$socketBSON examples:
+$socketBSON example - importing from mysql:
 
 First, let's look at the data that get written to the pipe by mongod
 $ cat ~/test/mysql_execute.json
@@ -66,3 +66,47 @@ Now let's make that happen with aggregate:
           ....
                 ]
 }
+
+---------------------------------------------------------------------------
+
+$socketBSON example - looking at electrical rate data by zip code:
+
+ $ wget -q -O - http://en.openei.org/doe-opendata/dataset/3e440383-a146-49b5-978a-e699334d2e1f/resource/3f00482e-8ea0-4b48-8243-a212b6322e74/download/iouzipcodes2011.csv | head -3
+zip,eiaid,utility_name,state,service_type,ownership,comm_rate,ind_rate,res_rate
+35218,195,Alabama Power Co,AL,Bundled,Investor Owned,0.105761195393,0.0602924366735,0.114943267065
+35219,195,Alabama Power Co,AL,Bundled,Investor Owned,0.105761195393,0.0602924366735,0.114943267065
+
+
+$ echo '{"uri":"http://en.openei.org/doe-opendata/dataset/3e440383-a146-49b5-978a-e699334d2e1f/resource/3f00482e-8ea0-4b48-8243-a212b6322e74/download/iouzipcodes2011.csv"}' | json2bson | csv2bson | bson2json | head
+{"ind_rate": "0.0602924366735", "zip": "35218", "res_rate": "0.114943267065", "comm_rate": "0.105761195393", "utility_name": "Alabama Power Co", "eiaid": "195", "state": "AL", "ownership": "Investor Owned", "service_type": "Bundled"}
+{"ind_rate": "0.0602924366735", "zip": "35219", "res_rate": "0.114943267065", "comm_rate": "0.105761195393", "utility_name": "Alabama Power Co", "eiaid": "195", "state": "AL", "ownership": "Investor Owned", "service_type": "Bundled"}
+...
+
+
+> db.test.aggregate({'$socketBSON':{host:'localhost',port:669, initial:{"uri":"http://en.openei.org/doe-opendata/dataset/3e440383-a146-49b5-978a-e699334d2e1f/resource/3f00482e-8ea0-4b48-8243-a212b6322e74/download/iouzipcodes2011.csv"}, output:false}}).pretty()
+{
+        "ind_rate" : "0.0602924366735",
+        "zip" : "35218",
+        "res_rate" : "0.114943267065",
+        "comm_rate" : "0.105761195393",
+        "utility_name" : "Alabama Power Co",
+        "eiaid" : "195",
+        "state" : "AL",
+        "ownership" : "Investor Owned",
+        "service_type" : "Bundled"
+}
+{
+        "ind_rate" : "0.0602924366735",
+        "zip" : "35219",
+        "res_rate" : "0.114943267065",
+        "comm_rate" : "0.105761195393",
+        "utility_name" : "Alabama Power Co",
+        "eiaid" : "195",
+        "state" : "AL",
+        "ownership" : "Investor Owned",
+        "service_type" : "Bundled"
+}
+...
+
+
+

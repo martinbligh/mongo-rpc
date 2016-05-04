@@ -84,7 +84,7 @@ using boost::intrusive_ptr;
 
 DocumentSourceSocketBson::DocumentSourceSocketBson(const intrusive_ptr<ExpressionContext>& pExpCtx,
                                                    BSONElement elem)
-    : DocumentSource(pExpCtx) {
+    : DocumentSource(pExpCtx), streamDocsOut(false) {
     log() << "DocumentSourceSocketBson constructor";
     assert(elem.type() == Object);
     options = elem.Obj().getOwned();
@@ -96,8 +96,10 @@ DocumentSourceSocketBson::DocumentSourceSocketBson(const intrusive_ptr<Expressio
     uint16_t port = options.getIntField("port");
     sockfd = tcp_client(host.c_str(), port);
     assert(sockfd >= 0);
-
     host += ":" + std::to_string(port);
+
+    if (options.hasField("output"))
+        streamDocsOut = options.getBoolField("output");
 
     if (options.hasField("initial"))
         writeToSocket(options.getObjectField("initial"));
