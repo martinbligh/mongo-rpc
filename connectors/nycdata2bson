@@ -1,0 +1,25 @@
+#!/usr/bin/python -u
+import sys, collections, csv, urllib2, bson, json
+
+# Input: one document.  { "uri":<uri> }
+
+# Reads a set of json data from the given URI in the format https://data.cityofnewyork.us seems to use.
+# Streams back one BSON doc per row
+
+# Example: https://data.cityofnewyork.us/api/views/25th-nujf/rows.json
+# Most Popular Baby Names by Sex and Mother's Ethnic Group, New York City
+
+# One could argue this should be integrated into httpGET, but it needs to pull in
+# project and unwind as the data set can easily exceed 16MB.
+
+uri = None
+for doc in bson.decode_file_iter(sys.stdin):
+    uri = doc['uri']
+    break
+
+data = json.load(urllib2.urlopen(uri))
+headers = [column['fieldName'].lstrip(':') for column in data['meta']['view']['columns']]
+
+for row in data['data']:
+    sys.stdout.write(bson.BSON.encode(dict(zip(headers, row))))
+

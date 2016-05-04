@@ -45,18 +45,18 @@
 #include "mongo/db/pipeline/value.h"
 #include "mongo/util/log.h"
 
-// TODO: replace asserts with uassert, but they're a PITA to maintain.
+namespace mongo {
 
-namespace {
+using boost::intrusive_ptr;
 
 // This is a hack. Needs fixing for all the pointless IPv6 crappage.
 int tcp_client(const char* hostname, uint16_t port) {
     struct hostent* host = gethostbyname(hostname);
     struct sockaddr_in addr;
-    int sockfd;
+    int sockfd = -1;
 
-    assert(host != NULL);
-    assert((host->h_addrtype == AF_INET) && (host->h_length == 4));
+    uassert(40082, "$socketBSON bad hostname", host != NULL);
+    uassert(40083, "$socketBSON not IPv4", (host->h_addrtype == AF_INET) && (host->h_length == 4));
 
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -64,29 +64,25 @@ int tcp_client(const char* hostname, uint16_t port) {
     struct in_addr** addr_list = (struct in_addr**)host->h_addr_list;
     for (int i = 0; addr_list[i] != NULL; i++) {
         addr.sin_addr.s_addr = *((uint32_t*)addr_list[i]);
-        if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+        if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
             continue;
+        }
         if (connect(sockfd, (struct sockaddr*)&(addr), sizeof(addr)) == -1) {
             close(sockfd);
+            sockfd = -1;
             continue;
         }
         break;
     }
 
-    assert(sockfd != -1);
+    uassert(40084, "tcp connect failed in $socketBSON", sockfd >= 0);
     return sockfd;
 }
-}
-
-namespace mongo {
-
-using boost::intrusive_ptr;
 
 DocumentSourceSocketBson::DocumentSourceSocketBson(const intrusive_ptr<ExpressionContext>& pExpCtx,
                                                    BSONElement elem)
     : DocumentSource(pExpCtx), streamDocsOut(false) {
     log() << "DocumentSourceSocketBson constructor";
-    assert(elem.type() == Object);
     options = elem.Obj().getOwned();
 
     if (options.hasField("host"))
@@ -95,7 +91,6 @@ DocumentSourceSocketBson::DocumentSourceSocketBson(const intrusive_ptr<Expressio
         host = "localhost";
     uint16_t port = options.getIntField("port");
     sockfd = tcp_client(host.c_str(), port);
-    assert(sockfd >= 0);
     host += ":" + std::to_string(port);
 
     if (options.hasField("output"))
@@ -118,7 +113,7 @@ void DocumentSourceSocketBson::writeToSocket(BSONObj bson) {
     log() << "writeToSocket " << bson;
     // do we have to cope with partial writes on full buffer?
     ssize_t bytesWritten = write(sockfd, bson.objdata(), bson.objsize());
-    assert(bson.objsize() == bytesWritten);
+    uassert(40085, "$socketBSON bson write failed", bson.objsize() == bytesWritten);
     log() << "writeToSocket wrote " << bytesWritten << " vs " << bson.objsize();
 }
 
@@ -172,7 +167,6 @@ boost::optional<Document> DocumentSourceSocketBson::getNextLookup() {
     else
         lookupDocument = input->getNestedField(FieldPath(lookupField)).getDocument();
     log() << "lookup on field: " << lookupField << " : " << lookupDocument;
-    assert(queryValue.getType() == Object);
     writeToSocket(lookupDocument.toBson());
 
     boost::optional<BSONObj> bson = readFromSocket();

@@ -1,0 +1,18 @@
+#!/usr/bin/python -u
+import sys, collections, csv, pymongo, bson
+
+# Input: one document.  { "aggregate":<ag pipeline> }
+# Connects to the specified DB and pulls data from it, spits it to stdout as BSON
+# TODO: add straight find
+
+for doc in bson.decode_file_iter(sys.stdin):
+    aggregation = doc['aggregate']
+    server = doc.get('server', 'localhost')
+    client = pymongo.MongoClient(server)
+    if 'user' in doc and 'passwd' in doc:
+        client.admin.authenticate(doc['user'], doc['passwd'])
+    collection = eval("client.%s.%s" % (doc['db'], doc['collection']))
+    break
+
+for row in collection.aggregate(aggregation):
+    sys.stdout.write(bson.BSON.encode(row))
