@@ -55,8 +55,8 @@ int tcp_client(const char* hostname, uint16_t port) {
     struct sockaddr_in addr;
     int sockfd = -1;
 
-    uassert(40082, "$socketBSON bad hostname", host != NULL);
-    uassert(40083, "$socketBSON not IPv4", (host->h_addrtype == AF_INET) && (host->h_length == 4));
+    uassert(40088, "$socketBSON bad hostname", host != NULL);
+    uassert(40089, "$socketBSON not IPv4", (host->h_addrtype == AF_INET) && (host->h_length == 4));
 
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -75,7 +75,7 @@ int tcp_client(const char* hostname, uint16_t port) {
         break;
     }
 
-    uassert(40084, "tcp connect failed in $socketBSON", sockfd >= 0);
+    uassert(40090, "tcp connect failed in $socketBSON", sockfd >= 0);
     return sockfd;
 }
 
@@ -113,7 +113,7 @@ void DocumentSourceSocketBson::writeToSocket(BSONObj bson) {
     log() << "writeToSocket " << bson;
     // do we have to cope with partial writes on full buffer?
     ssize_t bytesWritten = write(sockfd, bson.objdata(), bson.objsize());
-    uassert(40085, "$socketBSON bson write failed", bson.objsize() == bytesWritten);
+    uassert(40091, "$socketBSON bson write failed", bson.objsize() == bytesWritten);
     log() << "writeToSocket wrote " << bytesWritten << " vs " << bson.objsize();
 }
 
@@ -129,11 +129,15 @@ boost::optional<BSONObj> DocumentSourceSocketBson::readFromSocket() {
         return boost::none;
     }
     log() << "readFromSocket reading bytes: " << bsonLength;
-    void* bsonData = mongoMalloc(bsonLength);
-    bytesRead = read(sockfd, bsonData, bsonLength);
-    if (bytesRead != bsonLength) {
-        log() << "readFromSocket bad read: " << bytesRead;
-        return boost::none;
+    char* bsonData = (char*)mongoMalloc(bsonLength);
+    for (bytesRead = 0; bytesRead < bsonLength;) {
+        ssize_t newBytesRead = read(sockfd, bsonData + bytesRead, bsonLength - bytesRead);
+        if (newBytesRead <= 0) {
+            log() << "readFromSocket bad read: " << bytesRead;
+            free(bsonData);
+            return boost::none;
+        }
+        bytesRead += newBytesRead;
     }
 
     BSONObj bson = BSONObj((char*)bsonData).getOwned();  // add error check
