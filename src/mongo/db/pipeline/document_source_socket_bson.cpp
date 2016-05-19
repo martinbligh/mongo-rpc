@@ -82,7 +82,7 @@ int tcp_client(const char* hostname, uint16_t port) {
 DocumentSourceSocketBson::DocumentSourceSocketBson(const intrusive_ptr<ExpressionContext>& pExpCtx,
                                                    BSONElement elem)
     : DocumentSource(pExpCtx), streamDocsOut(false) {
-    log() << "DocumentSourceSocketBson constructor";
+    //   log() << "DocumentSourceSocketBson constructor";
     options = elem.Obj().getOwned();
 
     if (options.hasField("host"))
@@ -100,7 +100,7 @@ DocumentSourceSocketBson::DocumentSourceSocketBson(const intrusive_ptr<Expressio
         writeToSocket(options.getObjectField("initial"));
     lookupInProgress = false;
 
-    log() << "DocumentSourceSocketBson constructor done";
+    //    log() << "DocumentSourceSocketBson constructor done";
 }
 
 DocumentSourceSocketBson::~DocumentSourceSocketBson() {
@@ -122,13 +122,13 @@ boost::optional<BSONObj> DocumentSourceSocketBson::readFromSocket() {
     uint32_t bsonLength;
     ssize_t bytesRead;
 
-    log() << "readFromSocket";
-    bytesRead = recv(sockfd, &bsonLength, sizeof(bsonLength), MSG_PEEK);
+    // log() << "readFromSocket";
+    bytesRead = recv(sockfd, &bsonLength, sizeof(bsonLength), MSG_PEEK | MSG_WAITALL);
     if (bytesRead != sizeof(bsonLength)) {
         log() << "readFromSocket bad peek: " << bytesRead;
         return boost::none;
     }
-    log() << "readFromSocket reading bytes: " << bsonLength;
+    // log() << "readFromSocket reading bytes: " << bsonLength;
     char* bsonData = (char*)mongoMalloc(bsonLength);
     for (bytesRead = 0; bytesRead < bsonLength;) {
         ssize_t newBytesRead = read(sockfd, bsonData + bytesRead, bsonLength - bytesRead);
@@ -142,7 +142,7 @@ boost::optional<BSONObj> DocumentSourceSocketBson::readFromSocket() {
 
     BSONObj bson = BSONObj((char*)bsonData).getOwned();  // add error check
     free(bsonData);
-    log() << "readFromSocket done " << bson;
+    // log() << "readFromSocket read: " << bytesRead << " " << bson.getStringField("_id");
     return bson;
 }
 
@@ -150,7 +150,7 @@ boost::optional<BSONObj> DocumentSourceSocketBson::readFromSocket() {
 boost::optional<Document> DocumentSourceSocketBson::getNext() {
     pExpCtx->checkForInterrupt();
 
-    log() << "getNext";
+    // log() << "getNext";
     return options.hasField("localField") ? getNextLookup() : getNextNoLookup();
 }
 
@@ -158,7 +158,7 @@ boost::optional<Document> DocumentSourceSocketBson::getNext() {
 boost::optional<Document> DocumentSourceSocketBson::getNextLookup() {
     MutableDocument output;
 
-    log() << "getNextLookup lookupInProgress: " << lookupInProgress;
+    // log() << "getNextLookup lookupInProgress: " << lookupInProgress;
     boost::optional<Document> input = pSource->getNext();
     if (!input)
         return boost::none;
@@ -183,14 +183,13 @@ boost::optional<Document> DocumentSourceSocketBson::getNextLookup() {
 
 
 boost::optional<Document> DocumentSourceSocketBson::getNextNoLookup() {
-    log() << "getNextNoLookup";
-    uint32_t bsonLength;
-    if (recv(sockfd, &bsonLength, sizeof(bsonLength), MSG_PEEK) != sizeof(bsonLength))
-        return boost::none;
-
+    //     log() << "getNextNoLookup";
     auto bson = readFromSocket();
-    if (!bson)
+    // log() << "getNextNoLookup done";
+    if (!bson) {
+        //   log() << "getNextNoLookup ended per readFromSocket";
         return boost::none;
+    }
 
     return Document(*bson);
 }
