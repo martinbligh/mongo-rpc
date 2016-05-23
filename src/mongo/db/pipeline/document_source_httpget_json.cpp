@@ -138,9 +138,15 @@ boost::optional<Document> DocumentSourceHttpGetJson::getNext() {
         else
             output.reset(Document(elem.Obj()));
     } else {
-        if (options.hasField("as"))
-            output.setField(options.getStringField("as"), Value(bson));
-        else
+        if (options.hasField("as")) {
+            if (isArray(jsonBuf.data)) {
+                std::vector<Value> values;
+                for (auto&& elem : bson)
+                    values.push_back(Value(elem));
+                output.setField(options.getStringField("as"), Value(values));
+            } else
+                output.setField(options.getStringField("as"), Value(bson));
+        } else
             output.reset(Document(bson));
     }
 

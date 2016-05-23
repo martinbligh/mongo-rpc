@@ -110,11 +110,11 @@ DocumentSourceSocketBson::~DocumentSourceSocketBson() {
 REGISTER_DOCUMENT_SOURCE(socketBSON, DocumentSourceSocketBson::createFromBson);
 
 void DocumentSourceSocketBson::writeToSocket(BSONObj bson) {
-    log() << "writeToSocket " << bson;
+    // log() << "writeToSocket " << bson;
     // do we have to cope with partial writes on full buffer?
     ssize_t bytesWritten = write(sockfd, bson.objdata(), bson.objsize());
     uassert(40091, "$socketBSON bson write failed", bson.objsize() == bytesWritten);
-    log() << "writeToSocket wrote " << bytesWritten << " vs " << bson.objsize();
+    // log() << "writeToSocket wrote " << bytesWritten << " vs " << bson.objsize();
 }
 
 
@@ -170,7 +170,7 @@ boost::optional<Document> DocumentSourceSocketBson::getNextLookup() {
         lookupDocument = *input;
     else
         lookupDocument = input->getNestedField(FieldPath(lookupField)).getDocument();
-    log() << "lookup on field: " << lookupField << " : " << lookupDocument;
+    // log() << "lookup on field: " << lookupField << " : " << lookupDocument;
     writeToSocket(lookupDocument.toBson());
 
     boost::optional<BSONObj> bson = readFromSocket();
