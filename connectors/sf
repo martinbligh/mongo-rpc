@@ -1,0 +1,63 @@
+#!/usr/bin/python
+import os, sys, bson, json, dateutil.parser
+from simple_salesforce import Salesforce
+log = open("/tmp/sf.log", "w")
+
+# You need to put a json dict in ~/.sf that has something like this:
+# {
+#    "security_token":"ASDQ3ISJsCvDBeaNYwtsMtXo",
+#    "username":"billy.bob@mongodb.com",
+#    "password":"iamsecure"
+# }
+
+sfconfig = json.load(open(os.path.join(os.environ['HOME'], '.sf')))
+sf = Salesforce(**sfconfig)
+
+class Table:
+    def __init__(table, name):
+        table.name = name
+        table.describe = eval('sf.%s.describe()' % table.name)
+        table.fields = table.describe['fields']
+        table.fieldnames = {}
+        for field in table.fields:
+            if field['label'].startswith('zz'):            # exclude deprecated fields
+                continue
+            if field['name'] == 'Id':
+                field['label'] = '_id'
+            table.fieldnames[field['name']] = field
+
+    def select(table, fieldnames=None):
+        if not fieldnames:
+            fieldnames = [f['name'] for f in table.fields]
+        soql = "SELECT %s FROM %s" % (','.join(fieldnames), table.name)
+        nextRecordsUrl = None
+        while True:
+            if nextRecordsUrl is None:
+                result = sf.query(soql)
+            else:
+                result = sf.query_more(nextRecordsUrl, True)
+            for record in result['records']:
+                row = {}
+                for (fieldname, fieldvalue) in record.items():
+                    if fieldname in table.fieldnames:
+                        field = table.fieldnames[fieldname]
+                        if fieldvalue is None:
+                            continue
+                        if field['type'] in ['date', 'datetime']:
+                            fieldvalue = dateutil.parser.parse(fieldvalue)
+                        row[field['label']] = fieldvalue
+                yield(row)
+            if 'nextRecordsUrl' in result:
+                nextRecordsUrl = result['nextRecordsUrl']
+            else:
+                break
+
+for doc in bson.decode_file_iter(sys.stdin):
+    table = Table(doc['table'])
+    break
+
+count = 0
+for record in table.select():
+    sys.stdout.write(bson.BSON.encode(record))
+    count += 1
+log.write("%d\n" % count)
