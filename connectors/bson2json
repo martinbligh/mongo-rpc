@@ -1,11 +1,14 @@
 #!/usr/bin/python
-import sys, json, bson, collections
+import sys, json, bson, collections, datetime
 
 pretty = '-p' in sys.argv
 
 for doc in bson.decode_file_iter(sys.stdin):
     if "_id" in doc and type(doc["_id"]) is bson.objectid.ObjectId:      # E_NO_JSON for that
         doc["_id"] = str(doc["_id"])
+    for (k,v) in doc.iteritems():
+        if isinstance(v, datetime.datetime):
+            doc[k] = str(v)
     try:
         if pretty:
             print json.dumps(doc, indent=4)

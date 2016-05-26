@@ -43,9 +43,9 @@ class Table:
                         field = table.fieldnames[fieldname]
                         if fieldvalue is None:
                             continue
-                        if field['type'] in ['date', 'datetime']:
+                        if field["type"] in ["date", "datetime"]:
                             fieldvalue = dateutil.parser.parse(fieldvalue)
-                        row[field['label']] = fieldvalue
+                        row[field["label"]] = fieldvalue
                 yield(row)
             if 'nextRecordsUrl' in result:
                 nextRecordsUrl = result['nextRecordsUrl']
