@@ -1,11 +1,14 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 import sys, json, bson, collections, datetime
+from bson.codec_options import CodecOptions
 
 pretty = '-p' in sys.argv
+options = CodecOptions(document_class=collections.OrderedDict)
 
-for doc in bson.decode_file_iter(sys.stdin):
+for doc in bson.decode_file_iter(sys.stdin, codec_options = options):
     if "_id" in doc and type(doc["_id"]) is bson.objectid.ObjectId:      # E_NO_JSON for that
         doc["_id"] = str(doc["_id"])
+
     for (k,v) in doc.iteritems():
         if isinstance(v, datetime.datetime):
             doc[k] = str(v)
