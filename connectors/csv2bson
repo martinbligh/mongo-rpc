@@ -1,4 +1,4 @@
-#!/usr/bin/python -u
+#!/usr/bin/python2 -u
 import sys, collections, csv, urllib2, bson
 
 # Input: one document.
