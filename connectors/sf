@@ -1,7 +1,7 @@
-#!/usr/bin/python
-import os, sys, bson, json, dateutil.parser
+#!/usr/bin/python2
+import os, sys, bson, json, dateutil.parser, collections
 from simple_salesforce import Salesforce
-log = open("/tmp/sf.log", "w")
+log = open("/tmp/sf.log", "w", 0)
 
 # You need to put a json dict in ~/.sf that has something like this:
 # {
@@ -25,11 +25,15 @@ class Table:
             if field['name'] == 'Id':
                 field['label'] = '_id'
             table.fieldnames[field['name']] = field
+        types = set(f["type"] for f in table.fields)
+        log.write("Types: %s\n" % ', '.join(sorted(types)))
 
     def select(table, fieldnames=None):
         if not fieldnames:
             fieldnames = [f['name'] for f in table.fields]
+        # log.write(str(fieldnames) + "\n")
         soql = "SELECT %s FROM %s" % (','.join(fieldnames), table.name)
+        log.write(soql + "\n")
         nextRecordsUrl = None
         while True:
             if nextRecordsUrl is None:
@@ -37,8 +41,8 @@ class Table:
             else:
                 result = sf.query_more(nextRecordsUrl, True)
             for record in result['records']:
-                row = {}
-                for (fieldname, fieldvalue) in record.items():
+                row = collections.OrderedDict()
+                for (fieldname, fieldvalue) in sorted(record.items(), key = lambda (k,v) : k):
                     if fieldname in table.fieldnames:
                         field = table.fieldnames[fieldname]
                         if fieldvalue is None:
@@ -46,6 +50,7 @@ class Table:
                         if field["type"] in ["date", "datetime"]:
                             fieldvalue = dateutil.parser.parse(fieldvalue)
                         row[field["label"]] = fieldvalue
+                log.write("%s\n" % row)
                 yield(row)
             if 'nextRecordsUrl' in result:
                 nextRecordsUrl = result['nextRecordsUrl']
